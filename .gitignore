@@ -1,0 +1,14 @@
+# Сборка
+/target/
+/out/
+/lib/
+*.class
+
+# IDE
+/.idea/
+*.iml
+/.vscode/
+
+# ОС
+Thumbs.db
+.DS_Store
