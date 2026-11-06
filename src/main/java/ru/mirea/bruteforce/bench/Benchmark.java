@@ -72,8 +72,8 @@ public final class Benchmark {
         }
         if (runner.isAlive()) {
             // Бюджет исчерпан: считаем хэш не вскрытым за отведённое время.
-            long elapsedMs = (System.nanoTime() - start) / 1_000_000;
-            return new CrackResult(false, null, -1, elapsedMs, threads);
+            long elapsedNanos = System.nanoTime() - start;
+            return new CrackResult(false, null, -1, elapsedNanos, threads);
         }
         return box[0];
     }

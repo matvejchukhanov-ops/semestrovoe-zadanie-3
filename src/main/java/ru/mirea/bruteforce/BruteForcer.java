@@ -50,24 +50,29 @@ public final class BruteForcer {
         AtomicReference<String> foundPassword = new AtomicReference<>(null);
         AtomicBoolean stop = new AtomicBoolean(false);
         AtomicLong totalAttempts = new AtomicLong(0);
+        // Момент (нс), когда пароль был найден; 0 — пока не найден.
+        AtomicLong foundAtNs = new AtomicLong(0);
 
         long startNs = System.nanoTime();
 
         // Перебираем длины по возрастанию: короткие пароли находятся первыми.
         for (int length = minLength; length <= maxLength && !stop.get(); length++) {
-            searchLength(targetHash, length, foundPassword, stop, totalAttempts);
+            searchLength(targetHash, length, foundPassword, stop, totalAttempts, foundAtNs);
         }
 
-        long elapsedMs = (System.nanoTime() - startNs) / 1_000_000;
+        // Точное время: при успехе — до момента находки, иначе — весь прогон.
+        long endNs = (foundAtNs.get() > 0) ? foundAtNs.get() : System.nanoTime();
+        long elapsedNanos = endNs - startNs;
         String password = foundPassword.get();
-        return new CrackResult(password != null, password, totalAttempts.get(), elapsedMs, threads);
+        return new CrackResult(password != null, password, totalAttempts.get(), elapsedNanos, threads);
     }
 
     /** Перебор всех кандидатов фиксированной длины в несколько потоков. */
     private void searchLength(String targetHash, int length,
                               AtomicReference<String> foundPassword,
                               AtomicBoolean stop,
-                              AtomicLong totalAttempts) {
+                              AtomicLong totalAttempts,
+                              AtomicLong foundAtNs) {
         long total = generator.countForLength(length);
         long chunk = (total + threads - 1) / threads; // округление вверх
 
@@ -79,7 +84,7 @@ public final class BruteForcer {
             }
             long to = Math.min(from + chunk, total);
             Thread worker = new Thread(
-                    () -> searchRange(targetHash, length, from, to, foundPassword, stop, totalAttempts),
+                    () -> searchRange(targetHash, length, from, to, foundPassword, stop, totalAttempts, foundAtNs),
                     "bf-" + length + "-" + t);
             workers.add(worker);
             worker.start();
@@ -100,7 +105,8 @@ public final class BruteForcer {
     private void searchRange(String targetHash, int length, long from, long to,
                              AtomicReference<String> foundPassword,
                              AtomicBoolean stop,
-                             AtomicLong totalAttempts) {
+                             AtomicLong totalAttempts,
+                             AtomicLong foundAtNs) {
         long localAttempts = 0;
         for (long index = from; index < to; index++) {
             // Периодически проверяем, не нашёл ли кто-то пароль.
@@ -110,6 +116,8 @@ public final class BruteForcer {
             String candidate = generator.at(index, length);
             localAttempts++;
             if (hasher.matches(candidate, targetHash)) {
+                // Фиксируем точный момент находки (первый нашедший поток).
+                foundAtNs.compareAndSet(0, System.nanoTime());
                 foundPassword.set(candidate);
                 stop.set(true);
                 break;

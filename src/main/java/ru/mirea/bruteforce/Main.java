@@ -67,7 +67,7 @@ public final class Main {
             System.out.println("Пароль не найден в заданном пространстве перебора.");
         }
         System.out.printf("Проверено кандидатов: %,d%n", r.attempts());
-        System.out.printf("Время: %.3f с%n", r.elapsedMs() / 1000.0);
+        System.out.printf("Время подбора: %s%n", r.formattedElapsed());
         System.out.printf("Скорость: %,.0f хэшей/с%n", r.hashesPerSecond());
     }
 
