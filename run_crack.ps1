@@ -65,22 +65,27 @@ function Crack-File($mode, $hashFile) {
   }
 }
 
+$elapsed = @{}   # алгоритм -> время перебора, сек
+
 # MD5 / SHA-1 / bcrypt — все хэши одного алгоритма в одном файле
 foreach ($grp in @(@{a='MD5';m=0}, @{a='SHA-1';m=100}, @{a='bcrypt';m=3200})) {
   Write-Host ("Перебор {0}..." -f $grp.a) -ForegroundColor Cyan
   $f = Join-Path $Work ("in_{0}.txt" -f $grp.m)
   ($items | Where-Object { $_.a -eq $grp.a } | ForEach-Object { $_.h }) | Set-Content -Encoding ascii $f
-  Crack-File $grp.m $f
+  $t = Measure-Command { Crack-File $grp.m $f }
+  $elapsed[$grp.a] = $t.TotalSeconds
 }
 
 # Argon2id — по одному хэшу на запуск (общая соль у всех четырёх)
 Write-Host "Перебор Argon2id (GPU)..." -ForegroundColor Cyan
+$elapsed['Argon2id'] = 0.0
 $ai = 0
 foreach ($it in ($items | Where-Object { $_.a -eq 'Argon2id' })) {
   $ai++
   $f = Join-Path $Work ("in_argon_{0}.txt" -f $ai)
   $it.h | Set-Content -Encoding ascii $f
-  Crack-File 34000 $f
+  $t = Measure-Command { Crack-File 34000 $f }
+  $elapsed['Argon2id'] += $t.TotalSeconds
 }
 
 # ---- Формирование отчёта ----
@@ -94,8 +99,11 @@ $lines += '============================================================'
 $lines += ''
 
 $total = 0
+$timeTotal = 0.0
 foreach ($algo in @('MD5','SHA-1','bcrypt','Argon2id')) {
-  $lines += ("[{0}]" -f $algo)
+  $sec = [double]$elapsed[$algo]
+  $timeTotal += $sec
+  $lines += ("[{0}]   время перебора: {1:N3} с" -f $algo, $sec)
   foreach ($it in ($items | Where-Object { $_.a -eq $algo })) {
     $pw = $found[$it.h]
     if ($pw) {
@@ -109,6 +117,7 @@ foreach ($algo in @('MD5','SHA-1','bcrypt','Argon2id')) {
 }
 $lines += '------------------------------------------------------------'
 $lines += ("ИТОГО восстановлено: {0} из {1}" -f $total, $items.Count)
+$lines += ("Общее время перебора: {0:N3} с" -f $timeTotal)
 $lines += 'Примечание: «сложные» и «очень сложные» пароли на bcrypt/Argon2'
 $lines += 'словарём не берутся — это и есть доказательство стойкости.'
 
